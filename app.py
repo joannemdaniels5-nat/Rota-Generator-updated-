@@ -700,7 +700,7 @@ def rota_generate_week(staff_df, hours_df, hols, week_start: date):
                         chosen = best[1]
 
                 if not chosen:
-                    chosen = "Unassigned"
+                    chosen = "Additional Capacity"
 
                 if (d, name) not in active:
                     start_block(name, chosen, d, idx)
@@ -742,6 +742,7 @@ ROLE_COLORS = {
     "Emis_Tasks": "EAD1DC",
     "Docman_Tasks": "D0E0E3",
     "Awaiting_PSA_Admin": "D0E0E3",
+    "Additional Capacity": "E2EFDA",
     "Unassigned": "FFFFFF",
     "Break": "CFE2F3",
     "Holiday": "FFF2CC",
@@ -821,6 +822,12 @@ def build_workbook(staff_df, hours_df, hols, start_monday: date, weeks: int):
         df = pd.DataFrame(rows, columns=["Date", "Name", "Task", "Hours"])
         if df.empty:
             df = pd.DataFrame(columns=["Date", "Name", "Task", "Hours"])
+
+        # Merge Emis_Tasks + Docman_Tasks into a single public label "EMIS/Docman Tasks"
+        df["Task"] = df["Task"].replace({
+            "Emis_Tasks": "EMIS/Docman Tasks",
+            "Docman_Tasks": "EMIS/Docman Tasks",
+        })
 
         pivot_w = (
             df.groupby(["Name", "Task"])["Hours"].sum()
@@ -913,15 +920,98 @@ def build_workbook(staff_df, hours_df, hols, start_monday: date, weeks: int):
                     ws_site.cell(rr, cc).fill = fill_for(val)
                     ws_site.cell(rr, cc).alignment = Alignment(wrap_text=True, vertical="top")
 
+
+        # Safety alerts (after 16:00, require at least one Front Desk + one other staff on site)
+        ws_safe = wb.create_sheet(f"Week{w+1}_SafetyAlerts")
+        ws_safe.append(["Date", "Time", "Site", "FrontDeskCount", "NonFrontDeskCount", "Status"])
+        for c in ws_safe[1]:
+            c.font = Font(bold=True)
+            c.alignment = Alignment(horizontal="center", vertical="center")
+
+        for d in dates:
+            # Only Mon–Fri (0=Mon..4=Fri)
+            if d.weekday() > 4:
+                continue
+            for t in slots:
+                # Only from 16:00 onwards
+                if t < time(16, 0):
+                    continue
+                # Count staff per site
+                site_fd = {"SLGP": 0, "JEN": 0, "BGS": 0}
+                site_non = {"SLGP": 0, "JEN": 0, "BGS": 0}
+                for nm in staff_names:
+                    hk = holiday_kind(nm, d, hols)
+                    if hk:
+                        continue
+                    if not is_working(hmap, week_start, d, t, nm):
+                        continue
+                    role = a.get((d, t, nm), "")
+                    sr = staff_by_name[nm]
+                    home = str(sr.get("HomeSite", "")).upper()
+                    if home not in site_fd:
+                        continue
+                    if role.startswith("FrontDesk_"):
+                        site_fd[home] += 1
+                    elif role:
+                        site_non[home] += 1
+
+                for site in ["SLGP", "JEN", "BGS"]:
+                    fd_count = site_fd[site]
+                    non_count = site_non[site]
+                    if fd_count >= 1 and non_count >= 1:
+                        status = "SAFE"
+                    elif fd_count == 0 and non_count == 0:
+                        status = "No staff on site"
+                    elif fd_count == 0:
+                        status = "No Front Desk cover"
+                    else:
+                        status = "Front Desk lone worker"
+                    if status != "SAFE":
+                        ws_safe.append([
+                            d.isoformat(),
+                            t.strftime("%H:%M"),
+                            site,
+                            fd_count,
+                            non_count,
+                            status,
+                        ])
+
+        # Simple per-site headcount heatmap (numbers only, user can apply conditional formatting)
+        ws_hm = wb.create_sheet(f"Week{w+1}_SiteHeadcount")
+        ws_hm.append(["Date", "Time", "SLGP_Count", "JEN_Count", "BGS_Count"])
+        for c in ws_hm[1]:
+            c.font = Font(bold=True)
+            c.alignment = Alignment(horizontal="center", vertical="center")
+
+        for d in dates:
+            for t in slots:
+                counts = {"SLGP": 0, "JEN": 0, "BGS": 0}
+                for nm in staff_names:
+                    hk = holiday_kind(nm, d, hols)
+                    if hk:
+                        continue
+                    if not is_working(hmap, week_start, d, t, nm):
+                        continue
+                    sr = staff_by_name[nm]
+                    home = str(sr.get("HomeSite", "")).upper()
+                    if home in counts:
+                        counts[home] += 1
+                ws_hm.append([
+                    d.isoformat(),
+                    t.strftime("%H:%M"),
+                    counts["SLGP"],
+                    counts["JEN"],
+                    counts["BGS"],
+                ])
     return wb
 
 # =========================================================
 # Streamlit UI
 # =========================================================
-st.set_page_config(page_title="Rota Generator v11", layout="wide")
+st.set_page_config(page_title="Rota Generator v12", layout="wide")
 require_password()
 
-st.title("Rota Generator v11 — PSA Workforce-aligned rota")
+st.title("Rota Generator v12 — PSA Workforce-aligned rota")
 
 st.markdown(
     """
