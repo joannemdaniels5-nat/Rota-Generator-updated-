@@ -207,8 +207,9 @@ FD_MIN_BLOCK_SLOTS = 3        # 1.5h for Front Desk
 TRIAGE_MIN_BLOCK_SLOTS = 4    # 2h
 
 MAX_BLOCK_SLOTS_DEFAULT = 6   # 3h
+PHONES_MAX_BLOCK_SLOTS = 7      # 3.5h max for Phones
 FD_MAX_BLOCK_SLOTS = 6        # 3h
-TRIAGE_MAX_BLOCK_SLOTS = 8    # 4h (2–4h blocks)
+TRIAGE_MAX_BLOCK_SLOTS = 100   # effectively no max (up to full day)
 EMAIL_MAX_BLOCK_SLOTS = 8     # up to 4h
 
 BREAK_THRESHOLD_HOURS = 6.0
