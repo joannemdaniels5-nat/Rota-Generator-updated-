@@ -616,6 +616,17 @@ def rota_generate_week(staff_df, hours_df, hols, week_start: date):
                     continue
                 used_mins = role_minutes.get((d, name, role), 0)
                 primary = used_mins / 60.0
+
+                # continuity / swap friction for this role
+                prev_idx = idx - 1
+                if prev_idx >= 0:
+                    prev_t = slots[prev_idx]
+                    prev_role = a.get((d, prev_t, name))
+                    if prev_role == role:
+                        primary -= 2.0  # strong bonus for staying on same role
+                    elif prev_role and prev_role != role:
+                        primary += 2.0  # friction for swapping roles unnecessarily
+
                 tie = -(skill_weight(sr, role) - 3)
                 cands.append(((primary, tie), name))
 
@@ -643,6 +654,17 @@ def rota_generate_week(staff_df, hours_df, hols, week_start: date):
 
                 used_mins = role_minutes.get((d, name, role), 0)
                 primary = used_mins / 60.0 + site_bias(sr, role, d)
+
+                # continuity / swap friction for this role
+                prev_idx = idx - 1
+                if prev_idx >= 0:
+                    prev_t = slots[prev_idx]
+                    prev_role = a.get((d, prev_t, name))
+                    if prev_role == role:
+                        primary -= 2.0
+                    elif prev_role and prev_role != role:
+                        primary += 2.0
+
                 tie = -(skill_weight(sr, role) - 3)
                 cands.append(((primary, tie), name))
 
@@ -713,6 +735,17 @@ def rota_generate_week(staff_df, hours_df, hols, week_start: date):
                         if role != "Email_Box" and used >= 360:
                             continue
                         primary = used / 60.0 + site_bias(sr, role, d)
+
+                        # continuity / swap friction for fillers
+                        prev_idx = idx - 1
+                        if prev_idx >= 0:
+                            prev_t = slots[prev_idx]
+                            prev_role = a.get((d, prev_t, name))
+                            if prev_role == role:
+                                primary -= 2.0
+                            elif prev_role and prev_role != role:
+                                primary += 2.0
+
                         tie = -(skill_weight(sr, role) - 3)
                         score = (primary, tie)
                         if best is None or score < best[0]:
